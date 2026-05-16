@@ -1,0 +1,149 @@
+import telebot
+from telebot import types
+import random
+
+TOKEN = "8696680449:AAFZaRuOSgziaF4b3p8BIJo_ML2va3dw4n4"
+bot = telebot.TeleBot(TOKEN)
+
+# Списки для анонімних кімнат
+queue = []
+active_chats = {}
+
+# Список користувачів, які зараз спілкуються з РОБОТОМ
+bot_mode_users = set()
+
+# Базові фрази робота, якщо немає ключових слів
+BOT_PHRASES = [
+    "🤖 Привіт! Система працює на повну потужність. Що там у тебе нового?",
+    "🤖 О, привіт! Крута думка! А ти знав, що я можу вирахувати траєкторію польоту ендер-перла за 0.001 секунди? 🌌",
+    "🤖 Привіт-привіт! Мої датчики кажуть, що ти мега-крутий розробник, раз запустив мене з телефона! 👍",
+    "🤖 Х'юстон, привіт! У нас все чудово. Батарея в нормі, процесори горять! ⚡",
+    "🤖 Привіт! Запит прийнято. Переходжу в режим генерації відповіді рівня Гіперзаряду! 💎",
+    "🤖 Обережно! Зафіксовано високу концентрацію крутості в цьому чаті! 😎",
+    "🤖 Рівень моєї секретності вищий, ніж сховище з кристалами в Brawl Stars! 🔮",
+    "🤖 Привіт, друже! Шукаю редстоун-схему, щоб краще розуміти твої жарти... Все сходиться! ⚙️",
+    "🤖 Радий тебе бачити! Моя нейромережа каже, що сьогодні ідеальний день, щоб побудувати щось епічне!",
+    "🤖 Ой, привіт! Мій внутрішній компас показує, що ти щось цікаве задумав. Розкажи! 🧭"
+]
+
+# Функція для створення головного меню з кнопками
+def main_menu():
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    btn_room = types.KeyboardButton("👥 Кімнати (Знайти пару)")
+    btn_bot = types.KeyboardButton("🤖 Побалакати з Ботом")
+    markup.add(btn_room, btn_bot)
+    return markup
+
+# Функція для кнопки виходу
+def exit_menu():
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    btn_stop = types.KeyboardButton("❌ Вийти в головне меню")
+    markup.add(btn_stop)
+    return markup
+
+# 1. Команда /start
+@bot.message_handler(commands=['start', 'menu'])
+def send_welcome(message):
+    user_id = message.chat.id
+    if user_id in active_chats:
+        del active_chats[user_id]
+    if user_id in queue:
+        queue.remove(user_id)
+    if user_id in bot_mode_users:
+        bot_mode_users.remove(user_id)
+        
+    bot.send_message(
+        user_id, 
+        "Привіт! Обери режим спілкування за допомогою кнопок знизу: 👇", 
+        reply_markup=main_menu()
+    )
+
+# 2. Обробка текстових кнопок меню
+@bot.message_handler(func=lambda message: message.text in ["👥 Кімнати (Знайти пару)", "🤖 Побалакати з Ботом", "❌ Вийти в головне меню"])
+def handle_menu_buttons(message):
+    user_id = message.chat.id
+    text = message.text
+
+    if text == "❌ Вийти в головне меню":
+        if user_id in active_chats:
+            partner_id = active_chats[user_id]
+            del active_chats[user_id]
+            del active_chats[partner_id]
+            bot.send_message(partner_id, "Твій співрозмовник вийшов з кімнати. ❌", reply_markup=main_menu())
+            bot.send_message(user_id, "Ти вийшов з кімнати.", reply_markup=main_menu())
+        elif user_id in queue:
+            queue.remove(user_id)
+            bot.send_message(user_id, "Пошук кімнати скасовано.", reply_markup=main_menu())
+        elif user_id in bot_mode_users:
+            bot_mode_users.remove(user_id)
+            bot.send_message(user_id, "Ти вийшов з режиму робота.", reply_markup=main_menu())
+        else:
+            bot.send_message(user_id, "Ти вже в головному меню.", reply_markup=main_menu())
+        return
+
+    if text == "👥 Кімнати (Знайти пару)":
+        if user_id in active_chats or user_id in queue or user_id in bot_mode_users:
+            bot.send_message(user_id, "Ти вже десь спілкуєшся! Спочатку вийди в меню.")
+            return
+
+        if len(queue) > 0:
+            partner_id = queue.pop(0)
+            active_chats[user_id] = partner_id
+            active_chats[partner_id] = user_id
+            
+            bot.send_message(user_id, "Кімнату знайдено! Напиши 'Привіт' 😊", reply_markup=exit_menu())
+            bot.send_message(partner_id, "Кімнату знайдено! Напиши 'Привіт' 😊", reply_markup=exit_menu())
+        else:
+            queue.append(user_id)
+            bot.send_message(user_id, "Ти в черзі. Чекаємо інших людей... ⏳", reply_markup=exit_menu())
+
+    elif text == "🤖 Побалакати з Ботом":
+        if user_id in active_chats or user_id in queue or user_id in bot_mode_users:
+            bot.send_message(user_id, "Ти вже зайнятий в іншому режимі! Спочатку вийди в меню.")
+            return
+            
+        bot_mode_users.add(user_id)
+        bot.send_message(user_id, "🤖 Режим РОБОТА активовано! Напиши мені щось, і я відповім!", reply_markup=exit_menu())
+
+# 3. Пересилання повідомлень або РОЗУМНА відповідь робота
+@bot.message_handler(func=lambda message: True)
+def handle_all_messages(message):
+    user_id = message.chat.id
+    user_text = message.text.lower()
+    
+    if user_id in active_chats:
+        partner_id = active_chats[user_id]
+        bot.send_message(partner_id, message.text)
+        
+    elif user_id in bot_mode_users:
+        if "привіт" in user_text or "ку" in user_text or "hi" in user_text:
+            bot.send_message(user_id, "🤖 Привіт, розробнику! Мої системи готові до діалогу. Про що побалакаємо?")
+            
+        elif "як справи" in user_text or "як ти" in user_text:
+            bot.send_message(user_id, "🤖 Мої віртуальні справи супер! Процесори холодні, пам'ять чиста. Як твій день?")
+            
+        elif "майнкрафт" in user_text or "minecraft" in user_text:
+            bot.send_message(user_id, "🤖 О, Майнкрафт! Я якраз збирався побудувати автоматичну ферму на редстоуні. Який твій улюблений біом?")
+            
+        elif "бравл" in user_text or "brawl" in user_text:
+            bot.send_message(user_id, "🤖 Brawl Stars? Круто! Сподіваюсь, у тебе на акаунті є хоча б один Легендарний бравлер! 🔮")
+            
+        elif "жарт" in user_text or "розсміши" in user_text:
+            jakes = [
+                "🤖 Чому комп'ютери не ходять у школу? Бо вони вже мають багато плат! 💾",
+                "🤖 Скільки програмістов треба, щоб закрутити лампочку? Ніскільки, це апаратна проблема! 💡",
+                "🤖 Зустрічаються два блоки в Майнкрафті, а один каже: 'Чого ти такий квадратний?' 🟥"
+            ]
+            bot.send_message(user_id, random.choice(jakes))
+            
+        elif "хто ти" in user_text or "що ти вмієш" in user_text:
+            bot.send_message(user_id, "🤖 Я — твій особистий міні-ШІ! Я вмію розпізнавати слова про ігри, жартувати та підтримувати розмову.")
+            
+        else:
+            bot.send_message(user_id, random.choice(BOT_PHRASES))
+            
+    else:
+        bot.send_message(user_id, "Будь ласка, обери режим на кнопках знизу! 👇", reply_markup=main_menu())
+
+print("Бот з міні-ШІ успішно запущений і працює!")
+bot.infinity_polling()
